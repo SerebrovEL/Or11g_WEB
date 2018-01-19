@@ -1,0 +1,10 @@
+with 
+ q as
+   (select d.department_id as id
+     from hr.departments d
+    where d.location_id = 1800)
+select e.*,
+      (case 
+        when e.department_id = (select id from q)
+        then 'Canada' else 'USA' end) location
+  from hr.EMPLOYEES e;

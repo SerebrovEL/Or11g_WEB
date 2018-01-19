@@ -1,0 +1,294 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Oracle DBA Quick Guide - How to call an external C procedure from Oracle</title>
+<link rel="icon" href="http://www.shutdownabort.com/favicon.ico" type="image/x-icon"> 
+<link rel="shortcut icon" href="http://www.shutdownabort.com/favicon.ico" type="image/x-icon"> 
+<link href="/base/style.css" type="text/css" rel="stylesheet">
+<script type="text/javascript">
+function copy(what) {
+    window.clipboardData.setData('Text',what.value);
+}
+function paste(what) {
+    what.value = window.clipboardData.getData('Text');
+}
+function popup(mylink, windowname) {
+	if (! window.focus)return true;
+
+	var href, xPos, yPos, flags;
+	if (typeof(mylink) == 'string')
+		href=mylink;
+	else
+		href=mylink.href;
+	
+	xSize=710;
+	ySize=400;	
+	xPos=(screen.width / 2) - (xSize / 2);
+	yPos=(screen.height / 2) - (ySize / 2);
+
+	flags='width='+xSize+',height='+ySize+',scrollbars=yes,top='+yPos+',left='+xPos+',resizable=yes,status=no,location=no';
+
+	window.open(href, windowname, flags);
+	return false;
+}
+</script>
+</head>
+<body>
+
+<table border="0" cellspacing="0" cellpadding="0" width="100%" bgcolor="#336699">
+<tr><td height="10">
+<span class="maintitle">SQL&gt;&nbsp;shutdown&nbsp;abort&nbsp;.com</span>
+<br><br>
+</td>
+<td align="right">
+<form id="searchbox_009179648578372732725:mp_mzrrkuqc" action="http://www.google.com/cse">
+<input type="hidden" name="cx" value="009179648578372732725:mp_mzrrkuqc" />
+<input name="q" type="text" size="20" />
+<input type="submit" name="sa" value="Search" />
+<input type="hidden" name="cof" value="FORID:0" />
+</form>
+<script type="text/javascript" src="http://www.google.com/coop/cse/brand?form=searchbox_009179648578372732725%3Amp_mzrrkuqc"></script>
+</td>
+</tr>
+
+<tr><td colspan=2>
+ <table border="0" cellspacing="0" cellpadding="0" width="100%" bgcolor="#5588bb">
+ <tr><td>
+   <table border="0" cellspacing="0" cellpadding="0" bgcolor="#5588bb">
+     <tr>
+
+     <td align=left width="54">
+
+<a href="http://www.shutdownabort.com/about.php">About</a>
+
+</td><td align=left width="96">
+
+<a href="http://www.shutdownabort.com/dbaqueries/Administration_Status.php">DBA&nbsp;Queries</a>
+
+</td><td align=left width="92">
+
+<a href="http://www.shutdownabort.com/scripts/">DBA&nbsp;Scripts</a>
+
+</td><td align=left width="99">
+ 
+<a class="selected" href="http://www.shutdownabort.com/quickguides/">Quick&nbsp;Guides</a>
+
+</td><td align=left width="65">
+
+<a href="http://www.shutdownabort.com/nooleus.php">Nooleus</a>
+
+</td><td align=left width="89">
+
+<a href="http://www.shutdownabort.com/other_stuff.php">Other&nbsp;Stuff</a>
+
+</td><td align=left width="89">
+
+<a href="http://www.shutdownabort.com/contact.php">Contact</a>
+
+</td>
+     </tr>
+   </table>
+   </td>
+   <td align="right"><a href="http://www.shutdownabort.com/andy/"><img src="/images/key.png" alt="Andy only" border="0"></a></td><td>&nbsp;</td>
+   </tr>
+ </table>
+
+</td></tr>
+</table>
+
+<table border=0 cellspacing=0 cellpadding=0 width="100%">
+<tr>
+  <td bgcolor=#dddddd colspan=3>&nbsp;</td>
+</tr>
+<tr>
+  <td width="10%" bgcolor=#dddddd></td>
+  <td width="80%">
+<table cellspacing=10 cellpadding=10 width="100%"><tr><td>
+<h4>How to call an external C function from within Oracle</h4>
+One very useful feature of Oracle is its ability to call external C procedures from within the database.  It's handy for creating interfaces to legacy systems.<br>
+<br>
+The following procedure will demonstrate how to compile a simple C program, and how to configure the database to call it.  The C program will contain a single procedure for converting strings into uppercase.<br>
+<br>
+Several layers of objects and configuration will be required to make this work:<br>
+<br>
+<center>
+<b>C Program/library</b><br>
+(andy_lib.so)<br>
+|<br>
+<b>Listener</b><br>
+(extproc)<br>
+|<br>
+<b>Database library object</b><br>
+(andy_lib)<br>
+|<br>
+<b>Database function</b><br>
+(andy_lib_upper)<br>
+</center>
+<br>
+This might seem a little daunting and over complicated, but it's actually quite logical and very simple.  To simplify the process, we will construct the test case in the same order as the diagram above.<br>
+<br>
+To build this example you will need the following:
+<ul>
+<ul>
+<li>An oracle database (9i or later)
+<li>A working listener configuration
+<li>C compiler (gcc is used in the example)
+<li>A database user with 'create procedure' and 'create library' privileges
+</ul>
+</ul>
+
+<ul>
+<li><span class=step>1. Create the C program</span><br>
+Using a text editor, create a file named andy_lib.c and paste the following C code into it:
+<pre class="code">
+#include &lt;ctype.h&gt;
+
+int andy_upper(char *istr, char *ostr){
+        int i = 0;
+
+        while(istr[i]){
+                ostr[i] = toupper(istr[i]);
+                i++;
+        }
+
+        return 0;
+}
+</pre>
+
+
+<li><span class=step>2. Compile the shared library and copy it to the Oracle home</span><br>
+To compile and link the library run these commands:<br>
+<pre clase="code">
+gcc -c andy_lib.c
+ld -shared -o andy_lib.so andy_lib.o
+</pre>
+The linker will probable create the library with rather excessive permissions.  I'd advise changing them:<br>
+<pre class="code">
+chmod 600 andy_lib.so
+</pre>
+Now, copy the shared library to the Oracle home:<br>
+<pre class="code">
+cp andy_lib.so $ORACLE_HOME/bin/
+</pre>
+
+<li><span class=step>3. Configure the listener and tnsnames</span><br>
+The listener will need to be configured to handle external procedures (extproc).  My listener.ora looks like this:
+<pre class="code">
+SID_LIST_LISTENER =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = PLSExtProc)
+      (ORACLE_HOME = /app/oracle/product/10.2.0.3)
+      (PROGRAM = extproc)
+    )
+  )
+
+LISTENER =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = fermat)(PORT = 1521))
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC0))
+    )
+  )
+</pre>
+You will also need to add the following entry to your tnsnames.ora:<br>
+<pre class="code">
+EXTPROC_CONNECTION_DATA =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC0))
+    )
+    (CONNECT_DATA =
+      (SID = PLSExtProc)
+      (PRESENTATION = RO)
+    )
+  )
+</pre>
+Restart the listener and test the configuration with tnsping:
+<pre class="code">
+lsnrctl stop;lsnrctl start
+tnsping EXTPROC_CONNECTION_DATA
+</pre>
+
+<li><span class=step>4. Create a database library object</span><br>
+The library object is a pointer to the library file that we copied into the Oracle home.  Run the following SQL to create it:<br>
+<pre class="code">
+create or replace library andy_lib
+as '/app/oracle/product/10.2.0.3/bin/andy_lib.so'
+/
+</pre>
+
+<li><span class=step>5. Create a database function</span><br>
+The C library in this example contains a single function, but in reality your library might contain several.  We need to create function objects that map onto each of the procedures in the C library:<br>
+<pre class="code">
+create or replace function andy_lib_upper(
+	p_istr  in varchar2
+,	p_ostr out varchar2)
+return binary_integer 
+as external
+	library andy_lib
+	name "andy_upper"
+	language c
+	parameters (
+		p_istr string
+	,	p_ostr string);
+/
+</pre>
+
+<li><span class=step>6. Test it</span><br>
+Cut and paste the following pl/sql into sqlplus.  It will pass a lowercase string into the C function...<br>
+<pre class="code">
+set serveroutput on size 9999
+declare
+	res binary_integer;
+	v_in CHAR(100);
+	v_out CHAR(100);
+begin
+	v_in := 'hello world';
+
+	res := andy_lib_upper(v_in, v_out);
+
+	dbms_output.put_line(res);
+	dbms_output.put_line(v_in);
+	dbms_output.put_line(v_out);
+end;
+/
+</pre>
+If it works you will see the following:<br>
+<pre class="output">
+hello world
+HELLO WORLD
+</pre>
+If it doesn't work, you will most likely get one of these two errors:<br>
+<pre class="error">
+ERROR at line 1:
+ORA-28575: unable to open RPC connection to external procedure agent
+ORA-06512: at "ANDY.ANDY_LIB_UPPER", line 1
+ORA-06512: at line 8
+</pre>
+Or..
+<pre class="error">
+ERROR at line 1:
+ORA-28595: Extproc agent : Invalid DLL Path
+ORA-06512: at "ANDY.ANDY_LIB", line 1
+ORA-06512: at line 8
+</pre>
+Go back and make sure that you completed all of the steps properly.  Pay particular attention to the listener and tnsnames configuration.  If it all looks ok, try restarting the database and listener.  Make sure the listener is running before the database is started - it seems to be quite fussy about that.<br>
+
+</ul>
+</td></tr></table>
+</td>
+  <td width="10%" bgcolor=#dddddd></td>
+</tr>
+<tr>
+  <td bgcolor=#dddddd colspan=3>
+<center><a class="copyright" href="http://www.shutdownabort.com/contact.php">Copyright&copy; 2007-2010 Andrew Barry</a>
+</center>
+</td>
+</tr>
+</table>
+
+
+</body>
+</html>
